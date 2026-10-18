@@ -1,0 +1,17 @@
+# 只上传源码，构建产物与缓存一律忽略
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.spec
+.cache/
+wheels/
+settings.json
+*.log
+
+# 系统
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wallpaper Peel · Wallpaper Engine</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#f4f5f7; --card:#fff; --line:#e5e7eb; --ink:#1a1d21; --sub:#6b7280;
+    --accent:#2563eb; --accent-soft:#eaf0fe; --ok:#15803d;
+  }
+  body{background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+       padding-bottom:96px}
+  /* ---------- 顶栏 ---------- */
+  header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.88);backdrop-filter:blur(12px);
+         border-bottom:1px solid var(--line)}
+  .bar{max-width:1560px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .brand{font-size:17px;font-weight:650;letter-spacing:.3px;display:flex;align-items:center;gap:9px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+  .brand-sub{font-size:11.5px;font-weight:500;color:var(--sub);letter-spacing:.5px;
+             padding-left:9px;border-left:1px solid var(--line);margin-left:1px}
+  .path{font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums;flex:1;min-width:220px;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:7px 13px;
+       font-size:13px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .btn:hover{border-color:#c9ced6;background:#fafbfc}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:#1d4fd7;border-color:#1d4fd7}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--sub)}
+  .btn.ghost:hover{background:#eef0f3;color:var(--ink)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed;transform:none}
+  .filters{max-width:1560px;margin:0 auto;padding:0 28px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 13px;font-size:12.5px;
+        cursor:pointer;color:var(--sub);transition:.15s}
+  .chip:hover{border-color:#c9ced6;color:var(--ink)}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .chip b{font-weight:600}
+  .sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+  /* ---------- 网格 ---------- */
+  main{max-width:1560px;margin:22px auto 0;padding:0 28px;
+       display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+  .card{background:var(--card);border-radius:15px;overflow:hidden;position:relative;cursor:pointer;
+        border:1.5px solid transparent;box-shadow:0 1px 2px rgba(16,20,28,.05),0 10px 26px -18px rgba(16,20,28,.35);
+        transition:.16s}
+  .card:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(16,20,28,.06),0 16px 32px -18px rgba(16,20,28,.4)}
+  .card.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 12px 28px -18px rgba(37,99,235,.6)}
+  .shot{position:relative;aspect-ratio:16/9;background:#e9ebef;overflow:hidden}
+  .shot img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s}
+  .card:hover .shot img{transform:scale(1.03)}
+  .check{position:absolute;left:10px;top:10px;width:22px;height:22px;border-radius:7px;border:2px solid rgba(255,255,255,.9);
+         background:rgba(20,24,32,.35);display:flex;align-items:center;justify-content:center;transition:.15s}
+  .check svg{opacity:0;transition:.15s}
+  .card.sel .check{background:var(--accent);border-color:var(--accent)}
+  .card.sel .check svg{opacity:1}
+  .badges{position:absolute;right:10px;top:10px;display:flex;gap:6px}
+  .bd{font-size:10.5px;font-weight:650;letter-spacing:.3px;padding:3px 8px;border-radius:999px;
+      backdrop-filter:blur(6px);background:rgba(255,255,255,.9);color:#374151}
+  .bd.k4{background:rgba(220,38,38,.92);color:#fff}
+  .bd.k2{background:rgba(217,119,6,.92);color:#fff}
+  .bd.vid{background:rgba(17,24,39,.82);color:#fff}
+  .bd.none{background:rgba(107,114,128,.9);color:#fff}
+  .info{padding:13px 15px 15px}
+  .info h3{font-size:14px;font-weight:600;line-height:1.45;margin-bottom:5px;
+           display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .meta{font-size:12px;color:var(--sub);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .meta .tag{background:#f1f3f5;border-radius:5px;padding:1px 6px;font-size:11px}
+  .acts{display:flex;gap:8px;margin-top:11px;opacity:0;transition:.15s}
+  .card:hover .acts,.card.sel .acts{opacity:1}
+  .acts .btn{flex:1;padding:6px 0;font-size:12.5px;text-align:center}
+  .hint{margin-top:7px;font-size:11.5px;color:#b45309}
+  /* ---------- 底部导出条 ---------- */
+  .dock{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(255,255,255,.94);
+        backdrop-filter:blur(14px);border-top:1px solid var(--line);
+        padding:13px 28px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+        transform:translateY(110%);transition:transform .22s}
+  .dock.on{transform:none}
+  .dock .count{font-size:13px;font-weight:600}
+  .dock .count b{color:var(--accent);font-size:15px}
+  .dock input{flex:1;min-width:260px;max-width:620px;border:1px solid var(--line);border-radius:9px;
+              padding:8px 12px;font-size:12.5px;color:var(--ink);background:#fff}
+  .dock input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  /* ---------- 提示 ---------- */
+  .toast{position:fixed;left:50%;bottom:110px;transform:translate(-50%,20px);z-index:50;
+         background:#111827;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;
+         opacity:0;pointer-events:none;transition:.22s;max-width:80vw}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .toast.ok{background:#15803d}
+  .toast.err{background:#b91c1c}
+  .empty{max-width:1560px;margin:80px auto;text-align:center;color:var(--sub);font-size:13.5px;line-height:2}
+  .spin{width:22px;height:22px;border:2.5px solid var(--line);border-top-color:var(--accent);border-radius:50%;
+        animation:sp .8s linear infinite;display:inline-block;vertical-align:-5px;margin-right:9px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .skeleton{height:280px;border-radius:15px;background:linear-gradient(100deg,#eceef1 30%,#f6f7f9 50%,#eceef1 70%);
+            background-size:220% 100%;animation:sk 1.2s infinite}
+  @keyframes sk{to{background-position:-120% 0}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand"><span class="dot"></span>Wallpaper Peel<span class="brand-sub">壁纸库</span></div>
+    <div class="path" id="path">正在扫描…</div>
+    <button class="btn ghost" id="btnAll">全选</button>
+    <button class="btn ghost" id="btnNone">清空</button>
+    <button class="btn" id="btnAddRoot">指定目录</button>
+    <button class="btn" id="btnRescan">重新扫描</button>
+  </div>
+  <div class="filters" id="filters"></div>
+</header>
+
+<main id="grid"></main>
+<div class="empty" id="empty" style="display:none"></div>
+
+<div class="dock" id="dock">
+  <div class="count">已选 <b id="cnt">0</b> 张</div>
+  <input id="outdir" spellcheck="false" placeholder="导出目录">
+  <button class="btn" id="btnOpenDir">打开目录</button>
+  <button class="btn primary" id="btnExport">开始导出</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const state = { items: [], sel: new Set(), filter: 'all', only4k: false, outdir: '', busy: false };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function toast(msg, kind = '') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast on ' + kind;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.className = 'toast ' + kind; }, 2600);
+}
+
+function fmtBadge(it) {
+  if (it.kind === 'video') return '<span class="bd vid">视频</span>';
+  if (!it.savable) return '<span class="bd none">仅预览</span>';
+  if (it.w >= 3800) return '<span class="bd k4">4K</span>';
+  if (it.w >= 2500) return '<span class="bd k2">2K+</span>';
+  return `<span class="bd">${it.w}×${it.h}</span>`;
+}
+
+function card(it) {
+  const el = document.createElement('div');
+  el.className = 'card' + (state.sel.has(it.id) ? ' sel' : '');
+  el.dataset.id = it.id;
+  const dims = (it.w ? `${it.w}×${it.h} · ` : '') + (it.size || '');
+  const tags = (it.tags || []).slice(0, 2).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+  el.innerHTML = `
+    <div class="shot">
+      <img src="/api/thumb/${it.id}" loading="lazy" alt="">
+      <div class="check"><svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 6.5L4.7 9.2L10 3.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="badges">${fmtBadge(it)}</div>
+    </div>
+    <div class="info">
+      <h3 title="${esc(it.title || it.id)}">${esc(it.title || it.id)}</h3>
+      <div class="meta"><span>${dims}</span>${tags}</div>
+      ${it.kind === 'image' && it.w && it.w < 1400 ? '<div class="hint">作者原图分辨率本身偏低</div>' : ''}
+      <div class="acts">
+        ${it.savable ? '<button class="btn" data-act="save">保存这张</button>' : ''}
+        ${it.kind === 'image' ? '<button class="btn" data-act="set">设为桌面</button>' : ''}
+      </div>
+    </div>`;
+  el.addEventListener('click', e => {
+    const act = e.target.closest('[data-act]');
+    if (act) {
+      e.stopPropagation();
+      act.dataset.act === 'save' ? exportIds([it.id]) : setWall(it.id);
+      return;
+    }
+    toggle(it.id);
+  });
+  return el;
+}
+
+function render() {
+  const grid = $('grid');
+  const list = state.items.filter(it => {
+    if (state.filter === 'video' && it.kind !== 'video') return false;
+    if (state.filter === 'image' && it.kind !== 'image') return false;
+    if (state.only4k && !(it.w >= 3800)) return false;
+    return true;
+  });
+  grid.innerHTML = '';
+  list.forEach(it => grid.appendChild(card(it)));
+  $('empty').style.display = list.length ? 'none' : 'block';
+  if (!list.length) $('empty').textContent = '这个筛选条件下没有壁纸。';
+
+  const chips = [
+    ['all', `全部 <b>${state.items.length}</b>`],
+    ['image', `静态 <b>${state.items.filter(i => i.kind === 'image').length}</b>`],
+    ['video', `视频 <b>${state.items.filter(i => i.kind === 'video').length}</b>`],
+  ];
+  $('filters').innerHTML = chips.map(([k, label]) =>
+    `<div class="chip ${state.filter === k ? 'on' : ''}" data-f="${k}">${label}</div>`).join('')
+    + '<div class="sep"></div>'
+    + `<div class="chip ${state.only4k ? 'on' : ''}" data-4k="1">只看 4K</div>`;
+  $('filters').querySelectorAll('[data-f]').forEach(c =>
+    c.onclick = () => { state.filter = c.dataset.f; render(); });
+  const c4 = $('filters').querySelector('[data-4k]');
+  if (c4) c4.onclick = () => { state.only4k = !state.only4k; render(); };
+
+  syncSel();
+}
+
+function syncSel() {
+  document.querySelectorAll('.card').forEach(c =>
+    c.classList.toggle('sel', state.sel.has(c.dataset.id)));
+  const n = state.sel.size;
+  $('cnt').textContent = n;
+  $('dock').classList.toggle('on', n > 0);
+}
+
+function toggle(id) {
+  state.sel.has(id) ? state.sel.delete(id) : state.sel.add(id);
+  syncSel();
+}
+
+async function load() {
+  $('grid').innerHTML = Array.from({ length: 6 }, () => '<div class="skeleton"></div>').join('');
+  const r = await fetch('/api/list').then(r => r.json());
+  state.items = r.items;
+  state.outdir = r.outdir;
+  $('outdir').value = r.outdir;
+  const roots = (r.roots || []).join('   ·   ');
+  $('path').textContent = roots || '未找到壁纸库';
+  $('path').title = roots;
+  render();
+  if (!r.roots || !r.roots.length) {
+    $('empty').style.display = 'block';
+    $('empty').innerHTML = '没有自动找到壁纸库。<br>点右上角「指定目录」，选到 '
+      + '<code>…\\steamapps\\workshop\\content\\431960</code> 这一层即可。';
+  }
+  if (!r.hasPil) toast('未装 Pillow，缩略图直接使用原图，加载稍慢');
+}
+
+async function exportIds(ids) {
+  if (state.busy) return;
+  state.busy = true;
+  const btn = $('btnExport');
+  const old = btn.textContent;
+  btn.textContent = '导出中…'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, dir: $('outdir').value })
+    }).then(r => r.json());
+    if (r.ok === r.total && r.total > 0) {
+      toast(`已保存 ${r.ok} 张 → ${r.outdir}`, 'ok');
+      state.lastDir = r.outdir;
+    } else if (r.results.some(x => !x.ok)) {
+      toast(r.results.filter(x => !x.ok).map(x => x.msg).join('；'), 'err');
+    }
+  } catch (e) {
+    toast('导出失败: ' + e.message, 'err');
+  } finally {
+    state.busy = false; btn.textContent = old; btn.disabled = false;
+  }
+}
+
+async function setWall(id) {
+  toast('正在设置桌面背景…');
+  const r = await fetch('/api/set', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  }).then(r => r.json());
+  toast(r.msg + (r.ok ? '（Wallpaper Engine 运行中会盖住它，先暂停 WE）' : ''), r.ok ? 'ok' : 'err');
+}
+
+$('btnAll').onclick = () => {
+  state.items.filter(i => i.savable && (state.filter === 'all' || i.kind === state.filter)
+    && (!state.only4k || i.w >= 3800)).forEach(i => state.sel.add(i.id));
+  render();
+};
+$('btnNone').onclick = () => { state.sel.clear(); render(); };
+$('btnRescan').onclick = async () => {
+  const b = $('btnRescan'); b.disabled = true; b.textContent = '扫描中…';
+  await fetch('/api/rescan', { method: 'POST' });
+  await load();
+  b.disabled = false; b.textContent = '重新扫描';
+  toast('扫描完成', 'ok');
+};
+$('btnAddRoot').onclick = async () => {
+  const p = prompt('粘贴壁纸库路径（到 …\\workshop\\content\\431960 这一层）：\n例如 D:\\Steam\\steamapps\\workshop\\content\\431960');
+  if (!p) return;
+  const r = await fetch('/api/addroot', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: p })
+  }).then(r => r.json());
+  if (r.ok) { await load(); toast(`已添加，共 ${r.count} 个壁纸`, 'ok'); }
+  else toast(r.msg, 'err');
+};
+$('btnExport').onclick = () => exportIds([...state.sel]);
+$('btnOpenDir').onclick = () => {
+  fetch('/api/open', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: state.lastDir || $('outdir').value })
+  }).then(r => r.json()).then(r => { if (!r.ok) toast(r.msg, 'err'); });
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { state.sel.clear(); syncSel(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !/input/i.test(e.target.tagName)) {
+    e.preventDefault(); $('btnAll').click();
+  }
+});
+
+load();
+</script>
+</body>
+</html>
