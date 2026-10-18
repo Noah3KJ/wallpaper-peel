@@ -4,7 +4,6 @@
 启动: WallpaperPeel.exe   或   .venv\\Scripts\\python.exe wallpaper_peel.py
 仅用标准库；装了 Pillow 会自动用于生成缩略图（更快更省内存）。
 """
-import ctypes
 import json
 import os
 import re
@@ -367,12 +366,44 @@ def export_items(ids, outdir, items):
     return outdir, results
 
 
-def set_wallpaper(path):
-    SPI_SETDESKWALLPAPER = 20
-    SPIF_UPDATEINIFILE, SPIF_SENDCHANGE = 1, 2
-    ok = ctypes.windll.user32.SystemParametersInfoW(
-        SPI_SETDESKWALLPAPER, 0, ctypes.c_wchar_p(path), SPIF_UPDATEINIFILE | SPIF_SENDCHANGE)
-    return bool(ok)
+def list_drives():
+    out = []
+    for d in 'CDEFGHIJKLMNOPQRSTUVWXYZ':
+        root = f'{d}:\\'
+        if os.path.isdir(root):
+            out.append({'name': f'{d}:', 'path': root, 'drive': True})
+    return out
+
+
+def browse_dir(raw):
+    """给界面的目录选择器用：返回子目录列表"""
+    raw = (raw or '').strip().strip('"')
+    if not raw:
+        return {'path': '', 'parent': None, 'isDriveRoot': False,
+                'dirs': list_drives(), 'validRoot': False}
+
+    cur = os.path.normpath(os.path.expandvars(os.path.expanduser(raw)))
+    if not os.path.isdir(cur):
+        return {'path': cur, 'parent': None, 'isDriveRoot': False, 'dirs': [],
+                'validRoot': False, 'error': '目录不存在'}
+
+    parent = os.path.dirname(cur)
+    is_drive_root = parent == cur          # 已经是盘根
+    dirs = []
+    try:
+        with os.scandir(cur) as it:
+            for e in it:
+                try:
+                    if e.is_dir() and not e.name.startswith('$'):
+                        dirs.append({'name': e.name, 'path': e.path, 'drive': False})
+                except OSError:
+                    continue
+    except (PermissionError, OSError):
+        pass
+    dirs.sort(key=lambda d: d['name'].lower())
+    valid = any(d['name'].isdigit() for d in dirs)
+    return {'path': cur, 'parent': None if is_drive_root else parent,
+            'isDriveRoot': is_drive_root, 'dirs': dirs, 'validRoot': valid}
 
 
 # ---------------------------------------------------------------- HTTP
@@ -423,6 +454,9 @@ class Handler(BaseHTTPRequestHandler):
                 items = [{k: v for k, v in i.items() if k not in ('folder', 'src')} for i in STATE['items']]
             return self._json({'roots': STATE['roots'], 'items': items, 'hasPil': HAS_PIL,
                                'outdir': os.path.join(os.path.expanduser('~'), 'Pictures', 'WallpaperEngine导出')})
+        if p == '/api/browse':
+            q = urllib.parse.parse_qs(url.query)
+            return self._json(browse_dir((q.get('path') or [''])[0]))
         if p.startswith('/api/thumb/'):
             wid = p.rsplit('/', 1)[-1]
             it = next((i for i in STATE['items'] if i['id'] == wid), None)
@@ -462,15 +496,6 @@ class Handler(BaseHTTPRequestHandler):
             outdir, results = export_items(ids, payload.get('dir'), items)
             ok = sum(1 for r in results if r['ok'])
             return self._json({'outdir': outdir, 'ok': ok, 'total': len(results), 'results': results})
-
-        if url.path == '/api/set':
-            wid = payload.get('id')
-            it = next((i for i in STATE['items'] if i['id'] == wid), None)
-            if not it or it.get('kind') != 'image':
-                return self._json({'ok': False, 'msg': '只有图片可以设为桌面壁纸'}, 400)
-            src = os.path.join(CACHE_FULL, f"{wid}.{it['ext']}")
-            ok = set_wallpaper(src)
-            return self._json({'ok': ok, 'msg': '已设为桌面背景' if ok else '设置失败'})
 
         if url.path == '/api/open':
             target = payload.get('path')
@@ -516,11 +541,11 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     if os.name == 'nt':
         try:
-            os.system('title Wallpaper Peel v1.0')
+            os.system('title Wallpaper Peel v1.1')
         except Exception:
             pass
     print('=' * 52)
-    print('  Wallpaper Peel  v1.0   —— Wallpaper Engine 壁纸原图导出')
+    print('  Wallpaper Peel  v1.1   —— Wallpaper Engine 壁纸原图导出')
     print('=' * 52)
     print('扫描壁纸库…')
     n = rescan()
