@@ -134,7 +134,7 @@
 <div class="dock" id="dock">
   <div class="count">已选 <b id="cnt">0</b> 张</div>
   <input id="outdir" spellcheck="false" placeholder="导出目录">
-  <button class="btn" id="btnPickOut">选择…</button>
+  <button class="btn" id="btnPickOut">浏览…</button>
   <button class="btn" id="btnOpenDir">打开</button>
   <button class="btn primary" id="btnExport">开始导出</button>
 </div>
@@ -299,7 +299,41 @@ async function exportIds(ids) {
   }
 }
 
-/* ---------------- 目录选择 ---------------- */
+/* ---------------- 目录选择：优先用 Windows 原生对话框，失败退回内置浏览器 ---------------- */
+async function pickNative(mode) {
+  const initial = mode === 'dir' ? $('outdir').value : ($('path').title || '');
+  const title = mode === 'dir' ? '选择导出目录' : '选择壁纸库目录（…\\steamapps\\workshop\\content\\431960）';
+  toast('已弹出选择框，请到弹出的窗口里选…');
+  let r;
+  try {
+    r = await fetch('/api/pickfolder', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initial: initial || '', title: title })
+    }).then(x => x.json());
+  } catch (e) {
+    r = { ok: false, msg: e.message };
+  }
+  if (!r.ok) { toast(r.msg + '，改用页面内选择器', 'err'); openBrowser(mode, initial); return; }
+  if (!r.path) return;                       // 用户取消
+  applyPicked(mode, r.path);
+}
+
+async function applyPicked(mode, p) {
+  if (mode === 'root') {
+    const r = await fetch('/api/addroot', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: p })
+    }).then(x => x.json());
+    if (!r.ok) { toast(r.msg, 'err'); return; }
+    await load();
+    toast(`已切换，共 ${r.count} 个壁纸`, 'ok');
+  } else {
+    $('outdir').value = p;
+    toast('导出目录已设为 ' + p);
+  }
+}
+
+/* ---------------- 备用：页面内逐层选 ---------------- */
 async function browse(path) {
   const q = path ? ('?path=' + encodeURIComponent(path)) : '';
   const r = await fetch('/api/browse' + q).then(r => r.json());
@@ -323,7 +357,7 @@ async function browse(path) {
 
 function openBrowser(mode, startPath) {
   state.browseMode = mode;
-  $('modalTitle').textContent = mode === 'root' ? '选择壁纸库目录（…\\431960）' : '选择导出目录';
+  $('modalTitle').textContent = (mode === 'root' ? '选择壁纸库目录' : '选择导出目录') + '（页面内浏览）';
   $('mask').classList.add('on');
   browse(startPath || '');
 }
@@ -336,20 +370,9 @@ $('mask').onclick = e => { if (e.target === $('mask')) closeBrowser(); };
 $('mOk').onclick = async () => {
   const p = state.browse && state.browse.path;
   if (!p) return;
-  if (state.browseMode === 'root') {
-    const r = await fetch('/api/addroot', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: p })
-    }).then(r => r.json());
-    if (!r.ok) { toast(r.msg, 'err'); return; }
-    closeBrowser();
-    await load();
-    toast(`已切换，共 ${r.count} 个壁纸`, 'ok');
-  } else {
-    $('outdir').value = p;
-    closeBrowser();
-    toast('导出目录已设为 ' + p);
-  }
+  const mode = state.browseMode;
+  closeBrowser();
+  await applyPicked(mode, p);
 };
 
 /* ---------------- 按钮 ---------------- */
@@ -368,8 +391,8 @@ $('btnRescan').onclick = async () => {
   b.disabled = false; b.textContent = '重新扫描';
   toast('扫描完成', 'ok');
 };
-$('btnAddRoot').onclick = () => openBrowser('root', '');
-$('btnPickOut').onclick = () => openBrowser('dir', $('outdir').value);
+$('btnAddRoot').onclick = () => pickNative('root');
+$('btnPickOut').onclick = () => pickNative('dir');
 $('btnExport').onclick = () => exportIds([...state.sel]);
 $('btnOpenDir').onclick = () => {
   fetch('/api/open', {

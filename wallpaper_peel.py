@@ -8,6 +8,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 import sys
 import threading
 import urllib.parse
@@ -384,6 +385,18 @@ def browse_dir(raw):
 
     cur = os.path.normpath(os.path.expandvars(os.path.expanduser(raw)))
     if not os.path.isdir(cur):
+        # 目录可能还没创建，回溯到最近一个存在的祖先
+        probe = cur
+        while probe and not os.path.isdir(probe):
+            nxt = os.path.dirname(probe)
+            if nxt == probe:
+                probe = ''
+                break
+            probe = nxt
+        if probe:
+            fb = browse_dir(probe)
+            fb['note'] = f'{cur} 还不存在，已跳到 {probe}'
+            return fb
         return {'path': cur, 'parent': None, 'isDriveRoot': False, 'dirs': [],
                 'validRoot': False, 'error': '目录不存在'}
 
@@ -405,6 +418,26 @@ def browse_dir(raw):
     return {'path': cur, 'parent': None if is_drive_root else parent,
             'isDriveRoot': is_drive_root, 'dirs': dirs, 'validRoot': valid}
 
+
+
+# ---------------------------------------------------------------- 原生目录对话框
+
+def spawn_pick(initial='', title='请选择文件夹'):
+    """在子进程里弹出 Windows 原生目录选择框（崩了也不会拖垮主服务）"""
+    if FROZEN:
+        cmd = [sys.executable, '--pickfolder', initial or '', title]
+    else:
+        cmd = [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wallpaper_peel.py'),
+               '--pickfolder', initial or '', title]
+    flags = 0x08000000 if os.name == 'nt' else 0       # CREATE_NO_WINDOW
+    try:
+        p = subprocess.run(cmd, capture_output=True, timeout=600, creationflags=flags)
+    except Exception as e:
+        return {'ok': False, 'msg': f'无法启动选择框：{type(e).__name__}'}
+    out = p.stdout.decode('utf-8', 'replace').strip()
+    if p.returncode != 0:
+        return {'ok': False, 'msg': '系统选择框不可用'}
+    return {'ok': True, 'path': out}
 
 # ---------------------------------------------------------------- HTTP
 
@@ -497,6 +530,9 @@ class Handler(BaseHTTPRequestHandler):
             ok = sum(1 for r in results if r['ok'])
             return self._json({'outdir': outdir, 'ok': ok, 'total': len(results), 'results': results})
 
+        if url.path == '/api/pickfolder':
+            return self._json(spawn_pick(payload.get('initial') or '', payload.get('title') or '请选择文件夹'))
+
         if url.path == '/api/open':
             target = payload.get('path')
             if target and os.path.exists(target):
@@ -541,11 +577,11 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     if os.name == 'nt':
         try:
-            os.system('title Wallpaper Peel v1.1')
+            os.system('title Wallpaper Peel v1.2')
         except Exception:
             pass
     print('=' * 52)
-    print('  Wallpaper Peel  v1.1   —— Wallpaper Engine 壁纸原图导出')
+    print('  Wallpaper Peel  v1.2   —— Wallpaper Engine 壁纸原图导出')
     print('=' * 52)
     print('扫描壁纸库…')
     n = rescan()
@@ -577,6 +613,21 @@ def main():
 
 
 if __name__ == '__main__':
+    if '--pickfolder' in sys.argv:
+        try:
+            from folder_picker import pick_folder
+        except Exception as e:
+            sys.stderr.write(f'import folder_picker failed: {e}\n')
+            sys.exit(2)
+        i = sys.argv.index('--pickfolder')
+        initial = sys.argv[i + 1] if len(sys.argv) > i + 1 else ''
+        title = sys.argv[i + 2] if len(sys.argv) > i + 2 else '请选择文件夹'
+        res = pick_folder(initial, title)
+        if res is None:
+            sys.exit(3)
+        sys.stdout.write(res)
+        sys.stdout.flush()
+        sys.exit(0)
     try:
         main()
     except KeyboardInterrupt:
