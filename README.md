@@ -1,5 +1,8 @@
 # Wallpaper Peel
 
+> ⚠️ **非官方工具，与 Wallpaper Engine 无关；请仅用于备份自己已订阅的壁纸。**
+> 壁纸版权归原作者所有，请勿将导出的图片用于商业用途或公开二次分发。
+
 从 **Wallpaper Engine** 的创意工坊壁纸里，把作者上传的**原始贴图**剥出来 —— 分辨率就是作者原图，不受显示器分辨率和 Windows 缩放影响，也不经过任何二次压缩。
 
 > Wallpaper + Peel：把壁纸从 `scene.pkg` 的壳里"剥"出来。
@@ -83,4 +86,7 @@ entry*: int32 pathLen + path + int32 offset + int32 length
 
 ## License
 
-MIT
+本项目的代码以 **MIT** 发布，全文见 [LICENSE](LICENSE)。
+
+分发包（`WallpaperPeel.exe`）内含 Python / Pillow / PyInstaller，各自的许可证与版权声明见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
